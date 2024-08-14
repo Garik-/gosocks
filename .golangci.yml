@@ -1,0 +1,48 @@
+linters-settings:
+
+  varnamelen:
+    min-name-length: 1
+
+  govet:
+    enable-all: true
+
+  errcheck:
+    check-type-assertions: true
+
+  gocyclo:
+    min-complexity: 10
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+
+    settings:
+      hugeParam:
+        sizeThreshold: 500 # set a size threshold for heavy struct to force developers use pointers instead of passing params by value
+
+  depguard: # will check dependencies and imported packages with defined rules
+    rules:
+      main:
+        files:
+          - "!**/*_a _file.go"
+        allow:
+          - $gostd
+          - github.com/Garik-
+        deny:
+          - pkg: "github.com/pkg/example"
+            desc: should be replaced by blah blah package
+
+linters:
+  enable-all: true
+  disable:
+    - exhaustruct
+    - mnd
+    - gomnd
+    - execinquery
+
+run:
+  issues-exit-code: 1
