@@ -19,10 +19,10 @@ func Handle(_ context.Context, r io.Reader, w io.Writer) error {
 		return fmt.Errorf("selectMethod: %w", err)
 	}
 
-	res, err := request(r)
+	rep, err := replay(r)
 	if err != nil {
 		if errors.Is(err, errCommandUnsupported) || errors.Is(err, errAddressTypeUnsupported) {
-			_ = binary.Write(w, binary.BigEndian, res.bytes())
+			_ = binary.Write(w, binary.BigEndian, rep.Bytes())
 		}
 
 		return fmt.Errorf("request: %w", err)

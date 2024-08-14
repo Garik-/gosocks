@@ -4,63 +4,64 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
 )
 
 const (
-	VER                        byte = 0x05
-	NO_AUTHENTICATION_REQUIRED byte = 0x00
-	NO_ACCEPTABLE_METHODS      byte = 0xFF
+	version                  byte = 5
+	noAuthenticationRequired byte = 0
+	noAcceptableMethods      byte = 0xFF
 
-	ATYP_IPV4   byte = 1
-	ATYP_DOMAIN byte = 3
-	ATYP_IPV6   byte = 4
+	aTypeIPv4   byte = 1
+	aTypeDomain byte = 3
+	aTypeIPv6   byte = 4
 
-	CMD_CONNECT byte = 1
+	cmdConnect byte = 1
 
-	REPLY_OK                byte = 0
-	REPLY_CMD_UNSUPPORT     byte = 7
-	REPLY_ADD_UNSUPPORT     byte = 8
-	REPLY_ERROR             byte = 1
-	REPLY_HOST_UNACCESSIBLE byte = 4
-	REPLY_ERROR_CONNECT     byte = 5
+	// replyOk                 byte = 0 .
+	replyCmdUnsupport  byte = 7
+	replyAddrUnsupport byte = 8
+	// REPLY_ERROR             byte = 1 .
+	// REPLY_HOST_UNACCESSIBLE byte = 4 .
+	// REPLY_ERROR_CONNECT     byte = 5 .
 )
 
 type s5Request struct {
-	VER  byte
-	CMD  byte
-	RSV  byte
-	ATYP byte
+	Version     byte
+	Command     byte
+	Reserved    byte
+	AddressType byte
 }
 
-type s5Response struct {
-	VER  byte
-	REP  byte
-	RSV  byte
-	ATYP byte
-	ADDR []byte
-	PORT uint16
+type s5Replay struct {
+	address     []byte
+	port        uint16
+	version     byte
+	replay      byte
+	reserved    byte
+	addressType byte
 }
 
-func (r *s5Response) bytes() []byte {
-	buf := make([]byte, 6+len(r.ADDR))
+func (r *s5Replay) Bytes() []byte {
+	buf := make([]byte, 6+len(r.address))
 
-	buf[0] = r.VER
-	buf[1] = r.REP
-	buf[2] = r.RSV
-	buf[3] = r.ATYP
+	buf[0] = r.version
+	buf[1] = r.replay
+	buf[2] = r.reserved
+	buf[3] = r.addressType
 
 	j := 4
 
-	for i := range r.ADDR {
-		buf[j] = r.ADDR[i]
+	for i := range r.address {
+		buf[j] = r.address[i]
 		j++
 	}
 
-	buf[j] = byte(r.PORT >> 8)
-	buf[j+1] = byte(r.PORT & 0xff)
+	buf[j] = byte(r.port >> 8)
+	buf[j+1] = byte(r.port & 0xff)
 
 	return buf
 }
@@ -76,10 +77,10 @@ func handshakeMethods(reader io.Reader) ([]byte, error) {
 
 	err := binary.Read(reader, binary.BigEndian, &h)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("binary.Read: %w", err)
 	}
 
-	if byte(h>>8) != VER {
+	if byte(h>>8) != version {
 		return nil, errBadRequest
 	}
 
@@ -87,47 +88,52 @@ func handshakeMethods(reader io.Reader) ([]byte, error) {
 
 	err = binary.Read(reader, binary.BigEndian, &methods)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("binary.Read: %w", err)
 	}
 
 	return methods, nil
 }
 
 func selectMethod(methods []byte, writer io.Writer) error {
-	method := NO_AUTHENTICATION_REQUIRED
+	method := noAuthenticationRequired
 
 	if bytes.IndexByte(methods, method) == -1 {
-		method = NO_ACCEPTABLE_METHODS
+		method = noAcceptableMethods
 	}
 
-	return binary.Write(writer, binary.BigEndian, [2]byte{VER, method})
+	err := binary.Write(writer, binary.BigEndian, [2]byte{version, method})
+	if err != nil {
+		return fmt.Errorf("binary.Write: %w", err)
+	}
+
+	return nil
 }
 
-func address(atyp byte, addr []byte, port uint16) string {
+func dialAddress(aType byte, addr []byte, port uint16) string {
 	var host string
 
-	switch atyp {
-	case ATYP_IPV4, ATYP_IPV6:
+	switch aType {
+	case aTypeIPv4, aTypeIPv6:
 		host = net.IP(addr).String()
-	case ATYP_DOMAIN:
+	case aTypeDomain:
 		host = string(addr)
 	}
 
 	return net.JoinHostPort(host, strconv.FormatUint(uint64(port), 10))
 }
 
-func requestAddress(atyp byte, r io.Reader) ([]byte, error) {
+func readAddress(atyp byte, r io.Reader) ([]byte, error) {
 	var n byte
 
 	switch atyp {
-	case ATYP_IPV4:
+	case aTypeIPv4:
 		n = 4
-	case ATYP_IPV6:
+	case aTypeIPv6:
 		n = 16
-	case ATYP_DOMAIN:
+	case aTypeDomain:
 		err := binary.Read(r, binary.BigEndian, &n)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("binary.Read: %w", err)
 		}
 	}
 
@@ -135,53 +141,63 @@ func requestAddress(atyp byte, r io.Reader) ([]byte, error) {
 
 	err := binary.Read(r, binary.BigEndian, &addr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("binary.Read: %w", err)
 	}
 
 	return addr, nil
 }
 
-func request(r io.Reader) (*s5Response, error) {
+func readPort(r io.Reader) (uint16, error) {
+	var port uint16
+
+	err := binary.Read(r, binary.BigEndian, &port)
+	if err != nil {
+		return port, fmt.Errorf("binary.Read: %w", err)
+	}
+
+	return port, nil
+}
+
+func replay(r io.Reader) (*s5Replay, error) {
 	var req s5Request
 
 	err := binary.Read(r, binary.BigEndian, &req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("binary.Read: %w", err)
 	}
 
-	if req.VER != VER {
+	if req.Version != version {
 		return nil, errBadRequest
 	}
 
-	addr, err := requestAddress(req.ATYP, r)
+	addr, err := readAddress(req.AddressType, r)
 	if err != nil {
 		return nil, err
 	}
 
-	var port uint16
-
-	err = binary.Read(r, binary.BigEndian, &port)
+	port, err := readPort(r)
 	if err != nil {
 		return nil, err
 	}
 
-	res := &s5Response{
-		VER:  req.VER,
-		REP:  0xFF,
-		RSV:  req.RSV,
-		ATYP: req.ATYP,
-		ADDR: addr,
-		PORT: port,
+	res := &s5Replay{
+		version:     req.Version,
+		replay:      0xFF,
+		reserved:    req.Reserved,
+		addressType: req.AddressType,
+		address:     addr,
+		port:        port,
 	}
 
-	if req.CMD != CMD_CONNECT {
-		res.REP = REPLY_CMD_UNSUPPORT
+	if req.Command != cmdConnect {
+		res.replay = replyCmdUnsupport
 
 		return res, errCommandUnsupported
 	}
 
-	if bytes.IndexByte([]byte{ATYP_IPV4, ATYP_DOMAIN, ATYP_IPV6}, req.ATYP) == -1 {
-		res.REP = REPLY_ADD_UNSUPPORT
+	allowAddressTypes := []byte{aTypeIPv4, aTypeDomain, aTypeIPv6}
+	if bytes.IndexByte(allowAddressTypes, req.AddressType) == -1 {
+		res.replay = replyAddrUnsupport
 
 		return res, errAddressTypeUnsupported
 	}
