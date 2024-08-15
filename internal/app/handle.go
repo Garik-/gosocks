@@ -14,10 +14,19 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 
 	reader := bufio.NewReader(conn)
 
-	err := socks.Handle(ctx, reader, conn)
+	dstConn, err := socks.Handle(ctx, reader, conn)
 	if err != nil {
 		slog.Error("socket handle",
 			slog.String("err", err.Error()),
 		)
 	}
+
+	defer dstConn.Close()
+
+	slog.Info("open connection")
+
+	proxy := socks.NewProxy(conn, dstConn)
+	proxy.Start()
+
+	slog.Info("close connection")
 }

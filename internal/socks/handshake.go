@@ -21,12 +21,12 @@ const (
 
 	cmdConnect byte = 1
 
-	// replyOk                 byte = 0 .
+	replyOk            byte = 0
 	replyCmdUnsupport  byte = 7
 	replyAddrUnsupport byte = 8
 	// REPLY_ERROR             byte = 1 .
 	// REPLY_HOST_UNACCESSIBLE byte = 4 .
-	// REPLY_ERROR_CONNECT     byte = 5 .
+	REPLY_ERROR_CONNECT byte = 5
 )
 
 type s5Request struct {
@@ -43,6 +43,14 @@ type s5Replay struct {
 	replay      byte
 	reserved    byte
 	addressType byte
+}
+
+func (r *s5Replay) Network() string {
+	return "tcp"
+}
+
+func (r *s5Replay) String() string {
+	return dialAddress(r.addressType, r.address, r.port)
 }
 
 func (r *s5Replay) Bytes() []byte {
@@ -127,9 +135,9 @@ func readAddress(atyp byte, r io.Reader) ([]byte, error) {
 
 	switch atyp {
 	case aTypeIPv4:
-		n = 4
+		n = net.IPv4len
 	case aTypeIPv6:
-		n = 16
+		n = net.IPv6len
 	case aTypeDomain:
 		err := binary.Read(r, binary.BigEndian, &n)
 		if err != nil {
