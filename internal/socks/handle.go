@@ -65,7 +65,7 @@ func Handshake(_ context.Context, r io.Reader, w io.Writer, timeout time.Duratio
 	return c, nil
 }
 
-func splitHostPort(address string) ([]byte, uint16, error) { //nolint:gocritic
+func splitHostPort(address string) ([]byte, uint16, error) {
 	ip, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, 0, err
