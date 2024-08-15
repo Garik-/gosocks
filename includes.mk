@@ -31,3 +31,7 @@ endef
 .PHONY: golangci-lint-install
 golangci-lint-install: ## Install golangci-lint
 	$(call go_install_util,github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION),$(GOLANGCI_LINT_BIN))
+
+.PHONY: githooks-install
+githooks-install:
+	@git config --local core.hooksPath .githooks/

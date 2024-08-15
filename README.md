@@ -7,6 +7,7 @@ I'm terribly bored 🫠
 - support UDP
 - support authorization
 - test for long idle TCP connection
+
 ### Links
 [What is A Golang Linter And How To Use It?](https://rezakhademix.medium.com/what-is-a-golang-linter-and-how-to-use-it-1bffc0bd8062)  
 [Encoding Data with the Go Binary Package](https://medium.com/learning-the-go-programming-language/encoding-data-with-the-go-binary-package-42c7c0eb3e73)  

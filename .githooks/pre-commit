@@ -1,0 +1,6 @@
+#!/bin/sh
+
+make --jobs=4 lint
+x=$?
+echo exit code = $x
+exit $x
