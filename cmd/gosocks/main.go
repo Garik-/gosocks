@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Garik-/gosocks/internal/app"
+	_ "go.uber.org/automaxprocs"
 )
 
 func slogLevel(verbose bool) slog.Level {
@@ -25,7 +26,7 @@ func main() {
 
 	const (
 		verboseUsage   = "show verbose debug information"
-		verboseDefault = false
+		verboseDefault = true
 	)
 
 	flag.BoolVar(&verbose, "v", verboseDefault, verboseUsage)

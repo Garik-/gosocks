@@ -3,36 +3,26 @@ package socks
 import (
 	"context"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"io"
+
+	"golang.org/x/sync/errgroup"
 )
 
-type Proxy struct {
-	lconn, rconn io.ReadWriter
-}
-
-func NewProxy(lconn, rconn io.ReadWriter) *Proxy {
-	return &Proxy{
-		lconn: lconn,
-		rconn: rconn,
-	}
-}
-
-func (c *Proxy) Start(ctx context.Context) error {
+func StartTunnel(ctx context.Context, src, dst io.ReadWriter) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
-		return c.pipe(egCtx, c.lconn, c.rconn)
+		return pipe(egCtx, src, dst)
 	})
 
 	eg.Go(func() error {
-		return c.pipe(egCtx, c.rconn, c.lconn)
+		return pipe(egCtx, dst, src)
 	})
 
 	return eg.Wait()
 }
 
-func (c *Proxy) pipe(ctx context.Context, src, dst io.ReadWriter) error {
+func pipe(ctx context.Context, src, dst io.ReadWriter) error {
 	for {
 		select {
 		case <-ctx.Done():

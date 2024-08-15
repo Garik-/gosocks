@@ -43,6 +43,7 @@ linters:
     - mnd
     - gomnd
     - execinquery
+    - wrapcheck
 
 run:
   issues-exit-code: 1

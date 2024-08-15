@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func Handle(_ context.Context, r io.Reader, w io.Writer, timeout time.Duration) (net.Conn, error) {
+func Handshake(_ context.Context, r io.Reader, w io.Writer, timeout time.Duration) (net.Conn, error) {
 	methods, err := handshakeMethods(r)
 	if err != nil {
 		return nil, fmt.Errorf("handshakeMethods: %w", err)
@@ -41,8 +41,8 @@ func Handle(_ context.Context, r io.Reader, w io.Writer, timeout time.Duration) 
 
 	rep.replay = replyOk
 	rep.addressType = aTypeIPv4
-	rep.address, rep.port, err = splitHostPort(c.LocalAddr().String())
 
+	rep.address, rep.port, err = splitHostPort(c.LocalAddr().String())
 	if err != nil {
 		rep.replay = replyError
 		errWrite := binary.Write(w, binary.BigEndian, rep.Bytes())
@@ -58,13 +58,14 @@ func Handle(_ context.Context, r io.Reader, w io.Writer, timeout time.Duration) 
 	err = binary.Write(w, binary.BigEndian, rep.Bytes())
 	if err != nil {
 		errClose := c.Close()
+
 		return nil, errors.Join(err, errClose)
 	}
 
 	return c, nil
 }
 
-func splitHostPort(address string) ([]byte, uint16, error) {
+func splitHostPort(address string) ([]byte, uint16, error) { //nolint:gocritic
 	ip, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, 0, err
