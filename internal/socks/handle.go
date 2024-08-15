@@ -6,13 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"strconv"
 	"time"
 )
 
-func Handle(_ context.Context, r io.Reader, w io.Writer) (net.Conn, error) {
+func Handle(_ context.Context, r io.Reader, w io.Writer, timeout time.Duration) (net.Conn, error) {
 	methods, err := handshakeMethods(r)
 	if err != nil {
 		return nil, fmt.Errorf("handshakeMethods: %w", err)
@@ -32,26 +31,27 @@ func Handle(_ context.Context, r io.Reader, w io.Writer) (net.Conn, error) {
 		return nil, fmt.Errorf("request: %w", err)
 	}
 
-	slog.Info("try connect...", slog.String("address", dialAddress(rep.addressType, rep.address, rep.port)))
-
-	// TODO: move to config dialTimeout
-	c, err := net.DialTimeout("tcp", dialAddress(rep.addressType, rep.address, rep.port), time.Second*30)
+	c, err := net.DialTimeout("tcp", dialAddress(rep.addressType, rep.address, rep.port), timeout)
 	if err != nil {
 		rep.replay = REPLY_ERROR_CONNECT
-		err = binary.Write(w, binary.BigEndian, rep.Bytes())
+		errWrite := binary.Write(w, binary.BigEndian, rep.Bytes())
 
-		return nil, fmt.Errorf("net.Dial: %w", err)
+		return nil, fmt.Errorf("net.Dial: %w %w", err, errWrite)
 	} else {
 		rep.replay = replyOk
 		rep.addressType = aTypeIPv4
-		rep.address, rep.port = splitHostPort(c.LocalAddr().String())
+		rep.address, rep.port, err = splitHostPort(c.LocalAddr().String())
+
+		if err != nil {
+			rep.replay = REPLY_ERROR
+			errWrite := binary.Write(w, binary.BigEndian, rep.Bytes())
+
+			return nil, fmt.Errorf("splitHostPort: %w %w", err, errWrite)
+		}
 
 		if len(rep.address) == net.IPv6len {
 			rep.addressType = aTypeIPv6
 		}
-
-		//slog.Info(c.RemoteAddr().String())
-		//slog.Info(c.LocalAddr().String())
 
 		err = binary.Write(w, binary.BigEndian, rep.Bytes())
 		if err != nil {
@@ -62,10 +62,17 @@ func Handle(_ context.Context, r io.Reader, w io.Writer) (net.Conn, error) {
 	return c, nil
 }
 
-func splitHostPort(hostport string) ([]byte, uint16) {
-	ip, port, _ := net.SplitHostPort(hostport)
-	i := net.ParseIP(ip).To4()
-	p, _ := strconv.ParseUint(port, 10, 16)
+func splitHostPort(address string) ([]byte, uint16, error) {
+	ip, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, 0, err
+	}
 
-	return i, uint16(p)
+	i := net.ParseIP(ip).To4()
+	p, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return i, uint16(p), nil
 }

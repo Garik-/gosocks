@@ -5,16 +5,15 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"time"
 
 	"github.com/Garik-/gosocks/internal/socks"
 )
 
-func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
-	defer conn.Close()
+func (s *Server) handleConnection(ctx context.Context, srcConn net.Conn) {
+	defer srcConn.Close()
 
-	reader := bufio.NewReader(conn)
-
-	dstConn, err := socks.Handle(ctx, reader, conn)
+	dstConn, err := socks.Handle(ctx, bufio.NewReader(srcConn), srcConn, time.Second*30)
 	if err != nil {
 		slog.Error("socket handle",
 			slog.String("err", err.Error()),
@@ -25,8 +24,8 @@ func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 
 	slog.Info("open connection")
 
-	proxy := socks.NewProxy(conn, dstConn)
-	proxy.Start()
+	proxy := socks.NewProxy(srcConn, dstConn)
+	proxy.Start(ctx)
 
 	slog.Info("close connection")
 }

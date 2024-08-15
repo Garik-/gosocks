@@ -1,6 +1,8 @@
 package socks
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -21,21 +23,23 @@ func NewProxy(lconn, rconn io.ReadWriteCloser) *Proxy {
 	}
 }
 
-func (c *Proxy) Start() {
+func (c *Proxy) Start(ctx context.Context) {
 
 	//bidirectional copy
-	go c.pipe(c.lconn, c.rconn)
-	go c.pipe(c.rconn, c.lconn)
+	go c.pipe(ctx, c.lconn, c.rconn)
+	go c.pipe(ctx, c.rconn, c.lconn)
 
 	//wait for close...
 	<-c.Done()
 }
 
-func (c *Proxy) pipe(src, dst io.ReadWriter) {
+func (c *Proxy) pipe(ctx context.Context, src, dst io.ReadWriter) error {
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-c.Done():
-			return
+			return nil
 		default:
 		}
 
@@ -43,7 +47,7 @@ func (c *Proxy) pipe(src, dst io.ReadWriter) {
 		if err != nil {
 			c.Cancel(err)
 
-			return
+			return fmt.Errorf("io.Copy: %w", err)
 		}
 	}
 }
