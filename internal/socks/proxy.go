@@ -3,39 +3,36 @@ package socks
 import (
 	"context"
 	"fmt"
-	"io"
-	"net"
-	"time"
-
 	"golang.org/x/sync/errgroup"
+	"io"
 )
 
 type Proxy struct {
-	lconn, rconn net.Conn
+	lconn, rconn io.ReadWriter
 }
 
-func NewProxy(lconn, rconn net.Conn) *Proxy {
+func NewProxy(lconn, rconn io.ReadWriter) *Proxy {
 	return &Proxy{
 		lconn: lconn,
 		rconn: rconn,
 	}
 }
 
-func (c *Proxy) Start(ctx context.Context, timeout time.Duration) error {
+func (c *Proxy) Start(ctx context.Context) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
-		return c.pipe(egCtx, c.lconn, c.rconn, timeout)
+		return c.pipe(egCtx, c.lconn, c.rconn)
 	})
 
 	eg.Go(func() error {
-		return c.pipe(egCtx, c.rconn, c.lconn, timeout)
+		return c.pipe(egCtx, c.rconn, c.lconn)
 	})
 
 	return eg.Wait()
 }
 
-func (c *Proxy) pipe(ctx context.Context, src, dst net.Conn, timeout time.Duration) error {
+func (c *Proxy) pipe(ctx context.Context, src, dst io.ReadWriter) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -43,17 +40,7 @@ func (c *Proxy) pipe(ctx context.Context, src, dst net.Conn, timeout time.Durati
 		default:
 		}
 
-		err := dst.SetDeadline(time.Now().Add(timeout))
-		if err != nil {
-			return err
-		}
-
-		err = src.SetDeadline(time.Now().Add(timeout))
-		if err != nil {
-			return err
-		}
-
-		_, err = io.Copy(dst, src)
+		_, err := io.Copy(dst, src)
 		if err != nil {
 			return fmt.Errorf("io.Copy: %w", err)
 		}

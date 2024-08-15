@@ -27,7 +27,7 @@ func (s *Server) handleConnection(ctx context.Context, srcConn net.Conn) {
 	slog.Info("open connection")
 
 	proxy := socks.NewProxy(srcConn, dstConn)
-	err = proxy.Start(ctx, time.Second)
+	err = proxy.Start(ctx)
 
 	if err != nil {
 		slog.Error("socket handle",
