@@ -3,10 +3,11 @@ package socks
 import (
 	"context"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"net"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type Proxy struct {
@@ -46,6 +47,7 @@ func (c *Proxy) pipe(ctx context.Context, src, dst net.Conn, timeout time.Durati
 		if err != nil {
 			return err
 		}
+
 		err = src.SetDeadline(time.Now().Add(timeout))
 		if err != nil {
 			return err

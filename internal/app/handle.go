@@ -18,6 +18,8 @@ func (s *Server) handleConnection(ctx context.Context, srcConn net.Conn) {
 		slog.Error("socket handle",
 			slog.String("err", err.Error()),
 		)
+
+		return
 	}
 
 	defer dstConn.Close()
@@ -26,6 +28,7 @@ func (s *Server) handleConnection(ctx context.Context, srcConn net.Conn) {
 
 	proxy := socks.NewProxy(srcConn, dstConn)
 	err = proxy.Start(ctx, time.Second)
+
 	if err != nil {
 		slog.Error("socket handle",
 			slog.String("err", err.Error()),

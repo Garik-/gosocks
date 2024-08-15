@@ -16,9 +16,8 @@ const (
 	replyOk            byte = 0
 	replyCmdUnsupport  byte = 7
 	replyAddrUnsupport byte = 8
-	REPLY_ERROR        byte = 1
-	// REPLY_HOST_UNACCESSIBLE byte = 4 .
-	REPLY_ERROR_CONNECT byte = 5
+	replyError         byte = 1
+	replyErrorConnect  byte = 5
 )
 
 type s5Request struct {
