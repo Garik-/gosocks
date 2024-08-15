@@ -2,7 +2,6 @@ package socks
 
 import (
 	"context"
-	"errors"
 	"io"
 
 	"golang.org/x/sync/errgroup"
@@ -24,8 +23,10 @@ func StartTunnel(ctx context.Context, src, dst io.ReadWriteCloser) error {
 		return err
 	})
 
-	_, errCopy := io.Copy(dst, src)
-	errWait := eg.Wait()
+	eg.Go(func() error {
+		_, err := io.Copy(dst, src)
+		return err
+	})
 
-	return errors.Join(errCopy, errWait)
+	return eg.Wait()
 }
