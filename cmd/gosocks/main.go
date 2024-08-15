@@ -44,14 +44,13 @@ func main() {
 		slog.Bool("verbose", verbose),
 	)
 
-	ctx := context.Background()
-
 	srv, err := app.NewServer(*address)
 	if err != nil {
 		slog.Error("newServer", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	srv.Start(ctx)
 
 	// Wait for a SIGINT or SIGTERM signal to gracefully shut down the srv
@@ -59,6 +58,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
+	cancel()
 	slog.Debug("shutting down srv...")
 	srv.Stop(time.Second)
 	slog.Info("srv stopped")

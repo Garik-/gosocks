@@ -3,98 +3,57 @@ package socks
 import (
 	"context"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io"
-	"sync"
-	"sync/atomic"
+	"net"
+	"time"
 )
 
 type Proxy struct {
-	mu   sync.Mutex
-	done atomic.Value
-	err  error
-
-	lconn, rconn io.ReadWriteCloser
+	lconn, rconn net.Conn
 }
 
-func NewProxy(lconn, rconn io.ReadWriteCloser) *Proxy {
+func NewProxy(lconn, rconn net.Conn) *Proxy {
 	return &Proxy{
 		lconn: lconn,
 		rconn: rconn,
 	}
 }
 
-func (c *Proxy) Start(ctx context.Context) {
+func (c *Proxy) Start(ctx context.Context, timeout time.Duration) error {
+	eg, egCtx := errgroup.WithContext(ctx)
 
-	//bidirectional copy
-	go c.pipe(ctx, c.lconn, c.rconn)
-	go c.pipe(ctx, c.rconn, c.lconn)
+	eg.Go(func() error {
+		return c.pipe(egCtx, c.lconn, c.rconn, timeout)
+	})
 
-	//wait for close...
-	<-c.Done()
+	eg.Go(func() error {
+		return c.pipe(egCtx, c.rconn, c.lconn, timeout)
+	})
+
+	return eg.Wait()
 }
 
-func (c *Proxy) pipe(ctx context.Context, src, dst io.ReadWriter) error {
+func (c *Proxy) pipe(ctx context.Context, src, dst net.Conn, timeout time.Duration) error {
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-c.Done():
-			return nil
 		default:
 		}
 
-		_, err := io.Copy(dst, src)
+		err := dst.SetDeadline(time.Now().Add(timeout))
 		if err != nil {
-			c.Cancel(err)
+			return err
+		}
+		err = src.SetDeadline(time.Now().Add(timeout))
+		if err != nil {
+			return err
+		}
 
+		_, err = io.Copy(dst, src)
+		if err != nil {
 			return fmt.Errorf("io.Copy: %w", err)
 		}
 	}
-}
-
-func (c *Proxy) Done() <-chan struct{} {
-	d := c.done.Load()
-	if d != nil {
-		return d.(chan struct{})
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	d = c.done.Load()
-	if d == nil {
-		d = make(chan struct{})
-		c.done.Store(d)
-	}
-	return d.(chan struct{})
-}
-
-func (c *Proxy) Err() error {
-	c.mu.Lock()
-	err := c.err
-	c.mu.Unlock()
-	return err
-}
-
-// closedchan is a reusable closed channel.
-var closedchan = make(chan struct{})
-
-func init() {
-	close(closedchan)
-}
-
-func (c *Proxy) Cancel(err error) {
-	c.mu.Lock()
-	if c.err != nil {
-		c.mu.Unlock()
-		return // already canceled
-	}
-	c.err = err
-
-	d, _ := c.done.Load().(chan struct{})
-	if d == nil {
-		c.done.Store(closedchan)
-	} else {
-		close(d)
-	}
-
-	c.mu.Unlock()
 }
